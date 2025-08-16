@@ -10,10 +10,11 @@ interface AreaCardProps {
   goalType: GoalType;
   schedules: Schedule[];
   onClick?: () => void;
+  onQuickComplete?: (scheduleId: string) => void; // +++
   className?: string;
 }
 
-export function AreaCard({ goalType, schedules, onClick, className }: AreaCardProps) {
+export function AreaCard({ goalType, schedules, onClick, onQuickComplete, className }: AreaCardProps) {
   const completedCount = schedules.filter(s => s.status === 'DONE').length;
   const totalCount = schedules.length;
   const gradientClass = GOAL_TYPE_GRADIENTS[goalType];
@@ -60,12 +61,13 @@ export function AreaCard({ goalType, schedules, onClick, className }: AreaCardPr
             </div>
             
             <Button
-              size="sm" 
+              type="button"
+              size="sm"
               variant="ghost"
               className="w-full justify-start text-xs h-8"
               onClick={(e) => {
                 e.stopPropagation();
-                // Handle quick complete
+                if (nextTask && onQuickComplete) onQuickComplete(nextTask.id); // +++ chama o pai
               }}
             >
               <CheckCircle2 className="w-3 h-3 mr-2" />

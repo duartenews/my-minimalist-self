@@ -8,6 +8,19 @@ import { CheckCircle2, Clock, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GOAL_TYPE_LABELS, GoalType } from '@/types';
 
+// +++ NOVO +++
+type TimeWindowKey = 'morning' | 'lunch' | 'evening' | 'night';
+const PRESETS: Record<TimeWindowKey, { label: string; start: string; end: string }> = {
+  morning: { label: 'Morning (6–9 AM)', start: '06:00', end: '09:00' },
+  lunch:   { label: 'Lunch (12–2 PM)',   start: '12:00', end: '14:00' },
+  evening: { label: 'Evening (6–9 PM)',  start: '18:00', end: '21:00' },
+  night:   { label: 'Night (9–11 PM)',   start: '21:00', end: '23:00' },
+};
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const UTILIZATION: Record<1|2|3, number> = { 1: 0.35, 2: 0.5, 3: 0.75 };
+const diffMin = (s: string, e: string) =>
+  (new Date(`1970-01-01T${e}:00Z`).getTime() - new Date(`1970-01-01T${s}:00Z`).getTime()) / 60000;
+
 interface OnboardingProps {
   onComplete: (data: OnboardingData) => void;
 }
@@ -24,14 +37,48 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedAreas, setSelectedAreas] = useState<GoalType[]>([]);
   const [priorities, setPriorities] = useState<Record<GoalType, number>>({} as Record<GoalType, number>);
-  const [weeklyMinutes, setWeeklyMinutes] = useState([120]);
-  const [intensity, setIntensity] = useState<1 | 2 | 3>(1);
-  const [availabilities, setAvailabilities] = useState<string[]>([]);
+  const [intensity, setIntensity] = useState<1 | 2 | 3>(2); // balanced por padrão
+  const [availabilities, setAvailabilities] = useState(() =>
+    Array.from({ length: 7 }).map((_, i) => ({
+      day: i, // 0..6
+      windows: {
+        morning: { ...PRESETS.morning, enabled: i <= 4 }, // úteis
+        lunch:   { ...PRESETS.lunch,   enabled: false },
+        evening: { ...PRESETS.evening, enabled: true },
+        night:   { ...PRESETS.night,   enabled: false },
+      },
+    }))
+  );
 
   const totalSteps = 5;
   const progress = ((currentStep + 1) / totalSteps) * 100;
 
   const goalTypes = Object.keys(GOAL_TYPE_LABELS) as GoalType[];
+
+  // +++ NOVO +++
+  const selectedMinutes = React.useMemo(() => {
+    const raw = availabilities.reduce((acc: number, d: any) =>
+      acc + (Object.values(d.windows) as any[]).reduce(
+        (a, w: any) => a + (w.enabled ? diffMin(w.start, w.end) : 0),
+        0
+      ), 0);
+    return Math.round(raw * UTILIZATION[intensity]);
+  }, [availabilities, intensity]);
+
+  const hasAnyWindow = React.useMemo(
+    () => availabilities.some((d: any) => Object.values(d.windows).some((w: any) => w.enabled)),
+    [availabilities]
+  );
+
+  function toggleWindow(dayIdx: number, key: TimeWindowKey) {
+    setAvailabilities((prev: any[]) =>
+      prev.map((d, idx) =>
+        idx === dayIdx
+          ? { ...d, windows: { ...d.windows, [key]: { ...d.windows[key], enabled: !d.windows[key].enabled } } }
+          : d
+      )
+    );
+  }
 
   const handleAreaToggle = (area: GoalType) => {
     setSelectedAreas(prev => 
@@ -45,12 +92,19 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     if (currentStep < totalSteps - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
+      // "achatar" janelas habilitadas para algo simples tipo "day:window"
+      const flat: string[] = availabilities.flatMap((d: any) =>
+        (Object.entries(d.windows) as [TimeWindowKey, any][])
+          .filter(([, w]) => w.enabled)
+          .map(([k]) => `${d.day}:${k}`)
+      );
+
       onComplete({
         selectedAreas,
         priorities,
-        weeklyMinutes: weeklyMinutes[0],
+        weeklyMinutes: selectedMinutes, // DERIVADO
         intensity,
-        availabilities
+        availabilities: flat,
       });
     }
   };
@@ -60,8 +114,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       case 0: return true; // Welcome
       case 1: return selectedAreas.length > 0; // Areas
       case 2: return selectedAreas.every(area => priorities[area] !== undefined); // Priorities
-      case 3: return weeklyMinutes[0] > 0; // Time
-      case 4: return availabilities.length > 0; // Availability
+      case 3: return selectedMinutes > 0; // minutos derivados
+      case 4: return hasAnyWindow; // precisa ter ao menos 1 janela ligada
       default: return false;
     }
   };
@@ -153,45 +207,32 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <div className="space-y-6 animate-fade-in">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold text-foreground">How much time per week?</h2>
-              <p className="text-muted-foreground">Total time for all your self-improvement activities</p>
+              <p className="text-muted-foreground">Derived from your availability × intensity</p>
             </div>
-            
-            <div className="space-y-6">
-              <div className="text-center">
-                <div className="text-4xl font-bold text-primary mb-2">
-                  {weeklyMinutes[0]} minutes
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  About {Math.round(weeklyMinutes[0] / 60 * 10) / 10} hours per week
-                </div>
+
+            <div className="text-center">
+              <div className="text-4xl font-bold text-primary mb-2">{selectedMinutes} minutes</div>
+              <div className="text-sm text-muted-foreground">
+                About {Math.round((selectedMinutes / 60) * 10) / 10} hours per week
               </div>
-              
-              <Slider
-                value={weeklyMinutes}
-                onValueChange={setWeeklyMinutes}
-                min={30}
-                max={300}
-                step={15}
-                className="w-full"
-              />
-              
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { value: 60, label: 'Light', desc: '~9min/day' },
-                  { value: 120, label: 'Balanced', desc: '~17min/day' },
-                  { value: 180, label: 'Focused', desc: '~26min/day' }
-                ].map(({ value, label, desc }) => (
-                  <Button
-                    key={value}
-                    variant={weeklyMinutes[0] === value ? "default" : "outline"}
-                    className="h-auto flex-col py-3"
-                    onClick={() => setWeeklyMinutes([value])}
-                  >
-                    <span className="font-medium">{label}</span>
-                    <span className="text-xs opacity-70">{desc}</span>
-                  </Button>
-                ))}
-              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { v: 1 as const, label: 'Light', desc: '≈35% of windows' },
+                { v: 2 as const, label: 'Balanced', desc: '≈50% of windows' },
+                { v: 3 as const, label: 'Focused', desc: '≈75% of windows' },
+              ].map(({ v, label, desc }) => (
+                <Button
+                  key={v}
+                  variant={intensity === v ? 'default' : 'outline'}
+                  className="h-auto flex-col py-3"
+                  onClick={() => setIntensity(v)}
+                >
+                  <span className="font-medium">{label}</span>
+                  <span className="text-xs opacity-70">{desc}</span>
+                </Button>
+              ))}
             </div>
           </div>
         );
@@ -201,38 +242,31 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <div className="space-y-6 animate-fade-in">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold text-foreground">When are you usually free?</h2>
-              <p className="text-muted-foreground">Select your preferred time windows</p>
+              <p className="text-muted-foreground">Select your preferred time windows by day</p>
             </div>
-            
-            <div className="grid grid-cols-1 gap-3">
-              {[
-                { id: 'morning', label: 'Morning (6-9 AM)', desc: 'Start your day strong' },
-                { id: 'lunch', label: 'Lunch break (12-2 PM)', desc: 'Midday reset' },
-                { id: 'evening', label: 'Evening (6-9 PM)', desc: 'Wind down routine' },
-                { id: 'night', label: 'Night (9-11 PM)', desc: 'Before bed activities' }
-              ].map(({ id, label, desc }) => (
-                <Card
-                  key={id}
-                  className={cn(
-                    "cursor-pointer transition-all duration-200 hover:shadow-soft",
-                    availabilities.includes(id) 
-                      ? "ring-2 ring-primary bg-primary/5" 
-                      : "hover:bg-muted/50"
-                  )}
-                  onClick={() => setAvailabilities(prev => 
-                    prev.includes(id) 
-                      ? prev.filter(a => a !== id)
-                      : [...prev, id]
-                  )}
-                >
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div>
-                      <div className="font-medium">{label}</div>
-                      <div className="text-sm text-muted-foreground">{desc}</div>
-                    </div>
-                    {availabilities.includes(id) && (
-                      <CheckCircle2 className="w-5 h-5 text-primary" />
-                    )}
+
+            <div className="space-y-4">
+              {availabilities.map((d: any, di: number) => (
+                <Card key={di}>
+                  <CardHeader className="py-3">
+                    <CardTitle className="text-base">{DAYS[d.day]}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-wrap gap-2">
+                    {(Object.keys(PRESETS) as TimeWindowKey[]).map((k) => {
+                      const enabled = d.windows[k].enabled;
+                      return (
+                        <button
+                          key={k}
+                          onClick={() => toggleWindow(di, k)}
+                          className={cn(
+                            'px-3 py-2 rounded-xl border text-sm transition-colors',
+                            enabled ? 'bg-foreground text-background' : 'bg-background'
+                          )}
+                        >
+                          {PRESETS[k].label}
+                        </button>
+                      );
+                    })}
                   </CardContent>
                 </Card>
               ))}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Header } from '@/components/layout/header';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { AreaCard } from '@/components/ui/area-card';
@@ -31,15 +31,33 @@ const mockSchedules: Schedule[] = [
 ];
 
 export function Dashboard({ userName = 'Sarah' }: DashboardProps) {
+  // +++ NOVO +++
+  const [schedules, setSchedules] = useState<Schedule[]>(() => mockSchedules);
+
+  // opcional: carregar de localStorage
+  useEffect(() => {
+    const raw = localStorage.getItem('schedules');
+    if (raw) {
+      try { setSchedules(JSON.parse(raw)); } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('schedules', JSON.stringify(schedules));
+  }, [schedules]);
+
+  function toggleSchedule(id: string) {
+    setSchedules(prev => prev.map(s => s.id === id ? { ...s, status: s.status === 'DONE' ? 'PENDING' : 'DONE' } : s));
+  }
   const [activeTab, setActiveTab] = useState<'today' | 'week' | 'projects' | 'profile'>('today');
 
   // Group schedules by goal type (mock assignment)
   const schedulesByArea: Record<GoalType, Schedule[]> = {
-    BODY: [mockSchedules[0], mockSchedules[1]],
-    FOOD: [mockSchedules[2]],
+    BODY: schedules.filter(s => ['1','2'].includes(s.id)),
+    FOOD: schedules.filter(s => s.id === '3'),
     SLEEP: [],
-    HOME: [mockSchedules[3]],
-    LOOKS: [mockSchedules[4]],
+    HOME: schedules.filter(s => s.id === '4'),
+    LOOKS: schedules.filter(s => s.id === '5'),
     FINANCE: [],
     CAREER: []
   };
@@ -48,8 +66,8 @@ export function Dashboard({ userName = 'Sarah' }: DashboardProps) {
     .filter(([_, schedules]) => schedules.length > 0)
     .map(([area, _]) => area as GoalType);
 
-  const totalCompleted = mockSchedules.filter(s => s.status === 'DONE').length;
-  const totalTasks = mockSchedules.length;
+  const totalCompleted = schedules.filter(s => s.status === 'DONE').length;
+  const totalTasks = schedules.length;
 
   const renderTodayView = () => (
     <div className="space-y-6 pb-24">
@@ -101,6 +119,7 @@ export function Dashboard({ userName = 'Sarah' }: DashboardProps) {
               key={area}
               goalType={area}
               schedules={schedulesByArea[area]}
+              onQuickComplete={(scheduleId) => toggleSchedule(scheduleId)}
               onClick={() => {
                 // Navigate to area detail
               }}
