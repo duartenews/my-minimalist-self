@@ -48,15 +48,16 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     Array.from({ length: 7 }).map((_, i) => ({
       day: i, // 0..6
       windows: {
-        morning: { ...PRESETS.morning, enabled: i <= 4 }, // úteis
+        morning: { ...PRESETS.morning, enabled: i > 0 && i < 6 }, // Weekdays
         lunch:   { ...PRESETS.lunch,   enabled: false },
-        evening: { ...PRESETS.evening, enabled: true },
+        evening: { ...PRESETS.evening, enabled: i > 0 && i < 6 }, // Weekdays
         night:   { ...PRESETS.night,   enabled: false },
       },
     }))
   );
+  const [isCustomizing, setIsCustomizing] = useState(false);
 
-  const totalSteps = 4; // Removed one step
+  const totalSteps = 4;
   const progress = ((currentStep + 1) / totalSteps) * 100;
 
   const goalTypes = Object.keys(GOAL_TYPE_LABELS) as GoalType[];
@@ -88,7 +89,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     if (currentStep < totalSteps - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
-      // "achatar" janelas habilitadas para algo simples tipo "day:window"
       const flat: string[] = availabilities.flatMap((d) =>
         (Object.entries(d.windows) as [TimeWindowKey, { enabled: boolean }][])
           .filter(([, w]) => w.enabled)
@@ -98,8 +98,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       onComplete({
         selectedAreas,
         priorities,
-        weeklyMinutes: 0, // DUMMY VALUE
-        intensity: 2, // DUMMY VALUE
+        weeklyMinutes: 0,
+        intensity: 2,
         availabilities: flat,
       });
     }
@@ -107,10 +107,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
   const canProceed = () => {
     switch (currentStep) {
-      case 0: return true; // Welcome
-      case 1: return selectedAreas.length > 0; // Areas
-      case 2: return selectedAreas.every(area => priorities[area] !== undefined); // Priorities
-      case 3: return hasAnyWindow; // Was step 4
+      case 0: return true;
+      case 1: return selectedAreas.length > 0;
+      case 2: return selectedAreas.every(area => priorities[area] !== undefined);
+      case 3: return hasAnyWindow;
       default: return false;
     }
   };
@@ -126,7 +126,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               </div>
               <h1 className="text-3xl font-bold text-foreground">Welcome to Balance</h1>
               <p className="text-lg text-muted-foreground max-w-md mx-auto">
-                Design your perfect week with the minimum effective dose across all life areas
+                Design your perfect week with the minimum effective dose across all life areas.
               </p>
             </div>
             
@@ -141,8 +141,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         return (
           <div className="space-y-6 animate-fade-in">
             <div className="text-center space-y-2">
-              <h2 className="text-2xl font-bold text-foreground">Which areas matter most right now?</h2>
-              <p className="text-muted-foreground">Select the areas you want to focus on</p>
+              <h2 className="text-2xl font-bold text-foreground">Which areas matter most?</h2>
+              <p className="text-muted-foreground">Select the areas you want to focus on.</p>
             </div>
             
             <div className="grid grid-cols-1 gap-3">
@@ -174,7 +174,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <div className="space-y-6 animate-fade-in">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold text-foreground">Set your priorities</h2>
-              <p className="text-muted-foreground">How important is each area? (0 = none, 10 = highest)</p>
+              <p className="text-muted-foreground">How important is each area? (0-10)</p>
             </div>
             
             <div className="space-y-6">
@@ -197,40 +197,58 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           </div>
         );
 
-      case 3: // Was case 4
+      case 3:
         return (
           <div className="space-y-6 animate-fade-in">
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold text-foreground">When are you usually free?</h2>
-              <p className="text-muted-foreground">Select your preferred time windows by day</p>
+              <p className="text-muted-foreground">
+                Start with a default schedule and customize if needed.
+              </p>
             </div>
 
-            <div className="space-y-4">
-              {availabilities.map((d, di) => (
-                <Card key={di}>
-                  <CardHeader className="py-3">
-                    <CardTitle className="text-base">{DAYS[d.day]}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex flex-wrap gap-2">
-                    {(Object.keys(PRESETS) as TimeWindowKey[]).map((k) => {
-                      const enabled = d.windows[k].enabled;
-                      return (
-                        <button
-                          key={k}
-                          onClick={() => toggleWindow(di, k)}
-                          className={cn(
-                            'px-3 py-2 rounded-xl border text-sm transition-colors',
-                            enabled ? 'bg-foreground text-background' : 'bg-background'
-                          )}
-                        >
-                          {PRESETS[k].label}
-                        </button>
-                      );
-                    })}
+            {isCustomizing ? (
+              <div className="space-y-4">
+                {availabilities.map((d, di) => (
+                  <Card key={di}>
+                    <CardHeader className="py-3">
+                      <CardTitle className="text-base">{DAYS[d.day]}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-wrap gap-2">
+                      {(Object.keys(PRESETS) as TimeWindowKey[]).map((k) => {
+                        const enabled = d.windows[k].enabled;
+                        return (
+                          <button
+                            key={k}
+                            onClick={() => toggleWindow(di, k)}
+                            className={cn(
+                              'px-3 py-2 rounded-xl border text-sm transition-colors',
+                              enabled ? 'bg-foreground text-background' : 'bg-background'
+                            )}
+                          >
+                            {PRESETS[k].label}
+                          </button>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4 text-center">
+                <Card className="text-left">
+                  <CardContent className="p-4 space-y-1">
+                    <p className="font-medium">Default Schedule</p>
+                    <p className="text-sm text-muted-foreground">
+                      Weekdays, during morning and evening.
+                    </p>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
+                <Button variant="outline" onClick={() => setIsCustomizing(true)}>
+                  Customize Schedule
+                </Button>
+              </div>
+            )}
           </div>
         );
 
