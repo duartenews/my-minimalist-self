@@ -32,13 +32,6 @@ interface OnboardingProps {
   onComplete: (data: OnboardingData) => void;
 }
 
-type Availability = {
-  day: number;
-  windows: {
-    [key in TimeWindowKey]: (typeof PRESETS)[key] & { enabled: boolean };
-  };
-};
-
 export interface OnboardingData {
   selectedAreas: GoalType[];
   priorities: Record<GoalType, number>;
@@ -51,7 +44,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedAreas, setSelectedAreas] = useState<GoalType[]>([]);
   const [priorities, setPriorities] = useState<Record<GoalType, number>>({} as Record<GoalType, number>);
-  const [intensity, setIntensity] = useState<1 | 2 | 3>(2); // balanced por padrão
   const [availabilities, setAvailabilities] = useState<Availability[]>(() =>
     Array.from({ length: 7 }).map((_, i) => ({
       day: i, // 0..6
@@ -64,20 +56,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     }))
   );
 
-  const totalSteps = 5;
+  const totalSteps = 4; // Removed one step
   const progress = ((currentStep + 1) / totalSteps) * 100;
 
   const goalTypes = Object.keys(GOAL_TYPE_LABELS) as GoalType[];
-
-  // +++ NOVO +++
-  const selectedMinutes = React.useMemo(() => {
-    const raw = availabilities.reduce((acc, d) =>
-      acc + Object.values(d.windows).reduce(
-        (a, w) => a + (w.enabled ? diffMin(w.start, w.end) : 0),
-        0
-      ), 0);
-    return Math.round(raw * UTILIZATION[intensity]);
-  }, [availabilities, intensity]);
 
   const hasAnyWindow = React.useMemo(
     () => availabilities.some((d) => Object.values(d.windows).some((w) => w.enabled)),
@@ -116,8 +98,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       onComplete({
         selectedAreas,
         priorities,
-        weeklyMinutes: selectedMinutes, // DERIVADO
-        intensity,
+        weeklyMinutes: 0, // DUMMY VALUE
+        intensity: 2, // DUMMY VALUE
         availabilities: flat,
       });
     }
@@ -128,8 +110,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       case 0: return true; // Welcome
       case 1: return selectedAreas.length > 0; // Areas
       case 2: return selectedAreas.every(area => priorities[area] !== undefined); // Priorities
-      case 3: return selectedMinutes > 0; // minutos derivados
-      case 4: return hasAnyWindow; // precisa ter ao menos 1 janela ligada
+      case 3: return hasAnyWindow; // Was step 4
       default: return false;
     }
   };
@@ -216,42 +197,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           </div>
         );
 
-      case 3:
-        return (
-          <div className="space-y-6 animate-fade-in">
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl font-bold text-foreground">How much time per week?</h2>
-              <p className="text-muted-foreground">Derived from your availability × intensity</p>
-            </div>
-
-            <div className="text-center">
-              <div className="text-4xl font-bold text-primary mb-2">{selectedMinutes} minutes</div>
-              <div className="text-sm text-muted-foreground">
-                About {Math.round((selectedMinutes / 60) * 10) / 10} hours per week
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { v: 1 as const, label: 'Light', desc: '≈35% of windows' },
-                { v: 2 as const, label: 'Balanced', desc: '≈50% of windows' },
-                { v: 3 as const, label: 'Focused', desc: '≈75% of windows' },
-              ].map(({ v, label, desc }) => (
-                <Button
-                  key={v}
-                  variant={intensity === v ? 'default' : 'outline'}
-                  className="h-auto flex-col py-3"
-                  onClick={() => setIntensity(v)}
-                >
-                  <span className="font-medium">{label}</span>
-                  <span className="text-xs opacity-70">{desc}</span>
-                </Button>
-              ))}
-            </div>
-          </div>
-        );
-
-      case 4:
+      case 3: // Was case 4
         return (
           <div className="space-y-6 animate-fade-in">
             <div className="text-center space-y-2">
