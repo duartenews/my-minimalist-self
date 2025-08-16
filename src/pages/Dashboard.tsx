@@ -38,7 +38,14 @@ export function Dashboard({ userName = 'Sarah' }: DashboardProps) {
   useEffect(() => {
     const raw = localStorage.getItem('schedules');
     if (raw) {
-      try { setSchedules(JSON.parse(raw)); } catch {}
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          setSchedules(parsed as Schedule[]);
+        }
+      } catch {
+        /* ignore parsing errors */
+      }
     }
   }, []);
 
@@ -69,80 +76,59 @@ export function Dashboard({ userName = 'Sarah' }: DashboardProps) {
   const totalCompleted = schedules.filter(s => s.status === 'DONE').length;
   const totalTasks = schedules.length;
 
-  const renderTodayView = () => (
-    <div className="space-y-6 pb-24">
-      {/* Daily Summary */}
-      <Card className="bg-gradient-to-r from-primary to-primary-light text-primary-foreground shadow-elegant">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
+  const renderTodayView = () => {
+    const nextGlobal = mockSchedules.find(s => s.status === 'PENDING');
+
+    return (
+      <div className="space-y-4 pb-20">
+        {/* Daily Summary (NEW – compacto) */}
+        <div className="py-4">
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold">Today's Progress</h2>
-              <p className="text-primary-foreground/80 text-sm">You're doing great!</p>
+              <h1 className="text-xl font-semibold">Good morning, {userName}</h1>
+              <p className="text-xs text-muted-foreground">
+                {new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' })}
+              </p>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold">{totalCompleted}/{totalTasks}</div>
-              <div className="text-xs text-primary-foreground/80">tasks completed</div>
-            </div>
+            <span className="text-xs px-2 py-1 rounded-full bg-muted">
+              {totalCompleted}/{totalTasks}
+            </span>
           </div>
-          
-          <div className="flex items-center gap-2">
-            <div className="flex-1 bg-primary-foreground/20 rounded-full h-2">
-              <div 
-                className="bg-primary-foreground rounded-full h-2 transition-all duration-500"
-                style={{ width: `${(totalCompleted / totalTasks) * 100}%` }}
-              />
-            </div>
-            <Badge variant="secondary" className="bg-primary-foreground/20 text-primary-foreground border-0">
-              {Math.round((totalCompleted / totalTasks) * 100)}%
-            </Badge>
+
+          <div className="mt-3 h-2 w-full rounded-full bg-muted">
+            <div
+              className="h-2 rounded-full bg-foreground transition-all"
+              style={{ width: `${(totalCompleted / Math.max(totalTasks,1)) * 100}%` }}
+            />
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Quick Actions */}
-      <div className="flex gap-3">
-        <Button variant="outline" className="flex-1" size="sm">
-          <Sparkles className="w-4 h-4 mr-2" />
-          What should I do now?
+        <Button variant="secondary" size="sm" className="w-full">
+          {nextGlobal ? `Do now: ${nextGlobal.task.title} • ${nextGlobal.task.duration}m` : 'You’re clear for now'}
         </Button>
-        <Button variant="ghost" size="sm">
-          <Plus className="w-4 h-4" />
-        </Button>
-      </div>
 
-      {/* Area Cards */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-foreground">Your Focus Areas</h3>
-        <div className="grid grid-cols-1 gap-4">
+        {/* Area Cards */}
+        <div className="grid grid-cols-1 gap-3">
           {activeAreas.map((area) => (
             <AreaCard
               key={area}
               goalType={area}
               schedules={schedulesByArea[area]}
-              onQuickComplete={(scheduleId) => toggleSchedule(scheduleId)}
-              onClick={() => {
-                // Navigate to area detail
-              }}
+              onQuickComplete={(id) => toggleSchedule(id)}
             />
           ))}
         </div>
-      </div>
 
-      {/* Quick Check-in */}
-      <Card className="border-dashed border-2 border-muted">
-        <CardContent className="p-6 text-center">
-          <Clock className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-          <h3 className="font-semibold text-foreground mb-2">Quick Check-in</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            How are you feeling today? This helps us adjust your plan.
-          </p>
-          <Button variant="outline" size="sm">
-            2-minute check-in
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
-  );
+        {/* Quick Check-in */}
+        <Card className="border-dashed">
+          <CardContent className="p-4 text-center">
+            <p className="text-sm font-medium mb-1">Quick Check-in</p>
+            <Button variant="outline" size="sm">2-minute check-in</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
 
   const renderWeekView = () => (
     <div className="space-y-6 pb-24">

@@ -21,9 +21,23 @@ const UTILIZATION: Record<1|2|3, number> = { 1: 0.35, 2: 0.5, 3: 0.75 };
 const diffMin = (s: string, e: string) =>
   (new Date(`1970-01-01T${e}:00Z`).getTime() - new Date(`1970-01-01T${s}:00Z`).getTime()) / 60000;
 
+type Availability = {
+  day: number;
+  windows: {
+    [key in TimeWindowKey]: (typeof PRESETS)[key] & { enabled: boolean };
+  };
+};
+
 interface OnboardingProps {
   onComplete: (data: OnboardingData) => void;
 }
+
+type Availability = {
+  day: number;
+  windows: {
+    [key in TimeWindowKey]: (typeof PRESETS)[key] & { enabled: boolean };
+  };
+};
 
 export interface OnboardingData {
   selectedAreas: GoalType[];
@@ -38,7 +52,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [selectedAreas, setSelectedAreas] = useState<GoalType[]>([]);
   const [priorities, setPriorities] = useState<Record<GoalType, number>>({} as Record<GoalType, number>);
   const [intensity, setIntensity] = useState<1 | 2 | 3>(2); // balanced por padrão
-  const [availabilities, setAvailabilities] = useState(() =>
+  const [availabilities, setAvailabilities] = useState<Availability[]>(() =>
     Array.from({ length: 7 }).map((_, i) => ({
       day: i, // 0..6
       windows: {
@@ -57,21 +71,21 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
   // +++ NOVO +++
   const selectedMinutes = React.useMemo(() => {
-    const raw = availabilities.reduce((acc: number, d: any) =>
-      acc + (Object.values(d.windows) as any[]).reduce(
-        (a, w: any) => a + (w.enabled ? diffMin(w.start, w.end) : 0),
+    const raw = availabilities.reduce((acc, d) =>
+      acc + Object.values(d.windows).reduce(
+        (a, w) => a + (w.enabled ? diffMin(w.start, w.end) : 0),
         0
       ), 0);
     return Math.round(raw * UTILIZATION[intensity]);
   }, [availabilities, intensity]);
 
   const hasAnyWindow = React.useMemo(
-    () => availabilities.some((d: any) => Object.values(d.windows).some((w: any) => w.enabled)),
+    () => availabilities.some((d) => Object.values(d.windows).some((w) => w.enabled)),
     [availabilities]
   );
 
   function toggleWindow(dayIdx: number, key: TimeWindowKey) {
-    setAvailabilities((prev: any[]) =>
+    setAvailabilities((prev) =>
       prev.map((d, idx) =>
         idx === dayIdx
           ? { ...d, windows: { ...d.windows, [key]: { ...d.windows[key], enabled: !d.windows[key].enabled } } }
@@ -93,8 +107,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       setCurrentStep(prev => prev + 1);
     } else {
       // "achatar" janelas habilitadas para algo simples tipo "day:window"
-      const flat: string[] = availabilities.flatMap((d: any) =>
-        (Object.entries(d.windows) as [TimeWindowKey, any][])
+      const flat: string[] = availabilities.flatMap((d) =>
+        (Object.entries(d.windows) as [TimeWindowKey, { enabled: boolean }][])
           .filter(([, w]) => w.enabled)
           .map(([k]) => `${d.day}:${k}`)
       );
@@ -246,7 +260,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             </div>
 
             <div className="space-y-4">
-              {availabilities.map((d: any, di: number) => (
+              {availabilities.map((d, di) => (
                 <Card key={di}>
                   <CardHeader className="py-3">
                     <CardTitle className="text-base">{DAYS[d.day]}</CardTitle>
